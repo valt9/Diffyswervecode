@@ -1,66 +1,61 @@
-// Motor A of module 3 and 4
-int M3_A1 = 7;  // PWM pin for motor 3A
-int M3_A2 = 8;  // Direction pin for motor 3A
-int M4_A1 = 9;  // PWM pin for motor 4A
-int M4_A2 = 10; // Direction pin for motor 4A
+#include <CytronMotorDriver.h>
 
-// Encoder pins (interrupt pins)
-const int encoder3_A = 2;  // Encoder A for motor 3
-const int encoder3_B = 11;  // Encoder B for motor 3
-volatile int encoder3_count = 0;  // Encoder count for motor 3
+// Updated motor driver setup for Modules 3 & 4
+CytronMD motor3A(PWM_DIR, 6, 7);   // Module 3 Motor A: PWM 6, DIR 7
+CytronMD motor3B(PWM_DIR, 8, 9);   // Module 3 Motor B: PWM 8, DIR 9
+CytronMD motor4A(PWM_DIR, 10, 12); // Module 4 Motor A: PWM 10, DIR 11
+CytronMD motor4B(PWM_DIR, 11, 13); // Module 4 Motor B: PWM 12, DIR 13
 
-const int encoder4_A = 12;  // Encoder A for motor 4
-const int encoder4_B = 13;  // Encoder B for motor 4
-volatile int encoder4_count = 0;  // Encoder count for motor 4
+// Encoder pin assignments (unconflicted)
+const int ENC3_A_PIN = 2;  // Interrupt-capable
+const int ENC3_B_PIN = 4;
+const int ENC4_A_PIN = 3;  // Interrupt-capable
+const int ENC4_B_PIN = 5;
+
+// Encoder counts
+volatile long encoder3A_count = 0;
+volatile long encoder3B_count = 0;
+volatile long encoder4A_count = 0;
+volatile long encoder4B_count = 0;
+
+// Interrupt service routines
+void encoder3A_ISR() { encoder3A_count++; }
+void encoder3B_ISR() { encoder3B_count++; }
+void encoder4A_ISR() { encoder4A_count++; }
+void encoder4B_ISR() { encoder4B_count++; }
 
 void setup() {
-  // Set motor pins as output
-  pinMode(M3_A1, OUTPUT);
-  pinMode(M3_A2, OUTPUT);
-  pinMode(M4_A1, OUTPUT);
-  pinMode(M4_A2, OUTPUT);
-
-  // Set encoder pins as input
-  pinMode(encoder3_A, INPUT);
-  pinMode(encoder3_B, INPUT);
-  pinMode(encoder4_A, INPUT);
-  pinMode(encoder4_B, INPUT);
-  
-  // Attach interrupts to encoder pins
-  attachInterrupt(digitalPinToInterrupt(encoder3_A), encoder3_ISR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(encoder4_A), encoder4_ISR, CHANGE);
-
-  // Start serial communication
   Serial.begin(115200);
+
+  pinMode(ENC3_A_PIN, INPUT);
+  pinMode(ENC3_B_PIN, INPUT);
+  pinMode(ENC4_A_PIN, INPUT);
+  pinMode(ENC4_B_PIN, INPUT);
+
+  attachInterrupt(digitalPinToInterrupt(ENC3_A_PIN), encoder3A_ISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(ENC3_B_PIN), encoder3B_ISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(ENC4_A_PIN), encoder4A_ISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(ENC4_B_PIN), encoder4B_ISR, RISING);
 }
 
 void loop() {
-  // Check if data is available in the serial buffer
-  if (Serial.available() > 0) {
+  if (Serial.available()) {
     String command = Serial.readStringUntil('\n');
-    
-    // Parse motor commands from the received string
-    int m3a, m3b, m4a, m4b;
-    sscanf(command.c_str(), "M1:%d,%d;M2:%d,%d", &m3a, &m3b, &m4a, &m4b);
-    
-    // Control motor 3
-    analogWrite(M3_A1, abs(m3a));  // Set PWM for motor 3A
-    digitalWrite(M3_A2, m3a > 0 ? HIGH : LOW);  // Set direction
-    
-    // Control motor 4
-    analogWrite(M4_A1, abs(m4a));  // Set PWM for motor 4A
-    digitalWrite(M4_A2, m4a > 0 ? HIGH : LOW);  // Set direction
+    command.trim();
+
+    if (command.startsWith("M3:")) {
+      int m3a = command.substring(3, command.indexOf(',')).toInt();
+      int m3b = command.substring(command.indexOf(',') + 1, command.indexOf(';')).toInt();
+      motor3A.setSpeed(m3a);
+      motor3B.setSpeed(m3b);
+    }
+
+    if (command.indexOf("M4:") != -1) {
+      int m4_start = command.indexOf("M4:") + 3;
+      int m4a = command.substring(m4_start, command.indexOf(',', m4_start)).toInt();
+      int m4b = command.substring(command.indexOf(',', m4_start) + 1).toInt();
+      motor4A.setSpeed(m4a);
+      motor4B.setSpeed(m4b);
+    }
   }
-}
-
-// Interrupt service routine for encoder 3
-void encoder3_ISR() {
-  int state3 = digitalRead(encoder3_B);
-  encoder3_count += (state3 == HIGH) ? 1 : -1;  // Adjust count based on direction
-}
-
-// Interrupt service routine for encoder 4
-void encoder4_ISR() {
-  int state4 = digitalRead(encoder4_B);
-  encoder4_count += (state4 == HIGH) ? 1 : -1;  // Adjust count based on direction
 }
