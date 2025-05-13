@@ -57,31 +57,44 @@ def record_joystick_input():
             timestamp = time.time()
             file.write(f"{timestamp}, {x_axis:.2f}, {y_axis:.2f}, {rotation_axis:.2f}\n")
 
-        # Print coordinates (for debugging)
-        print(f"X: {x_axis:.2f}, Y: {y_axis:.2f}, Rotation: {rotation_axis:.2f}")
-
         # Convert joystick X/Y into motor commands for swerve drive
-        # First joystick controls movement (forward, backward, strafe left/right)
-        m1a, m1b = int(255 * y_axis), int(255 * -x_axis)  # Motor A of module 1 (X -> strafe, Y -> forward/back)
-        m2a, m2b = int(255 * y_axis), int(255 * x_axis)   # Motor A of module 2 (X -> strafe, Y -> forward/back)
+        base_speed = int(255 * y_axis)
+        strafe_speed = int(255 * -x_axis)
+        rotation_speed = int(255 * rotation_axis)
 
-        # Second joystick controls rotation
-        # Use rotation_axis to adjust the direction of rotation (turning the robot)
-        rotation_speed = int(255 * rotation_axis)  # Scale rotation axis to PWM speed
-        m1a += rotation_speed  # Add rotation to motor A of module 1
-        m1b -= rotation_speed  # Subtract rotation from motor B of module 1
-        m2a += rotation_speed  # Add rotation to motor A of module 2
-        m2b -= rotation_speed  # Subtract rotation from motor B of module 2
+        # Compute speeds for each motor in each module
+        m1a = base_speed + rotation_speed
+        m1b = strafe_speed - rotation_speed
 
-        # Send motor commands to Arduino
+        m2a = base_speed + rotation_speed
+        m2b = -strafe_speed - rotation_speed
+
+        m3a = base_speed + rotation_speed
+        m3b = strafe_speed - rotation_speed
+
+        m4a = base_speed + rotation_speed
+        m4b = -strafe_speed - rotation_speed
+
+        # Clamp motor values to valid range
+        def clamp(val):
+            return max(min(val, 255), -255)
+
+        m1a, m1b = clamp(m1a), clamp(m1b)
+        m2a, m2b = clamp(m2a), clamp(m2b)
+        m3a, m3b = clamp(m3a), clamp(m3b)
+        m4a, m4b = clamp(m4a), clamp(m4b)
+
+        # Send motor commands
         command_1 = f"M1:{m1a},{m1b};M2:{m2a},{m2b}\n"
-        command_2 = f"M1:{m1a},{m1b};M2:{m2a},{m2b}\n"
+        command_2 = f"M3:{m3a},{m3b};M4:{m4a},{m4b}\n"
 
-        arduino_1.write(command_1.encode())  # Send to Arduino for modules 1 and 2
-        arduino_2.write(command_2.encode())  # Send to Arduino for modules 3 and 4
+        arduino_1.write(command_1.encode())
+        arduino_2.write(command_2.encode())
 
-        # Frame rate control
-        pygame.time.Clock().tick(30)  # ~30Hz loop
+        print(f"Sent to Arduino 1: {command_1.strip()}")
+        print(f"Sent to Arduino 2: {command_2.strip()}")
+
+        pygame.time.Clock().tick(30)
 
     pygame.quit()
 
