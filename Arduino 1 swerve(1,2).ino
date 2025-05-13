@@ -1,66 +1,61 @@
-// Motor A of module 1 and 2
-int M1_A1 = 3;  // PWM pin for motor 1A
-int M1_A2 = 4;  // Direction pin for motor 1A
-int M2_A1 = 5;  // PWM pin for motor 2A
-int M2_A2 = 6;  // Direction pin for motor 2A
+#include <CytronMotorDriver.h>
 
-// Encoder pins (interrupt pins)
-const int encoder1_A = 2;  // Encoder A for motor 1
-const int encoder1_B = 7;  // Encoder B for motor 1
-volatile int encoder1_count = 0;  // Encoder count for motor 1
+// Updated motor driver setup for Modules 1 & 2
+CytronMD motor1A(PWM_DIR, 6, 7);   // Module 1 Motor A: PWM 6, DIR 7
+CytronMD motor1B(PWM_DIR, 8, 9);   // Module 1 Motor B: PWM 8, DIR 9
+CytronMD motor2A(PWM_DIR, 10, 12); // Module 2 Motor A: PWM 10, DIR 11
+CytronMD motor2B(PWM_DIR, 11, 13); // Module 2 Motor B: PWM 12, DIR 13
 
-const int encoder2_A = 8;  // Encoder A for motor 2
-const int encoder2_B = 9;  // Encoder B for motor 2
-volatile int encoder2_count = 0;  // Encoder count for motor 2
+// Encoder pin assignments (unconflicted)
+const int ENC1_A_PIN = 2;  // Interrupt-capable
+const int ENC1_B_PIN = 4;
+const int ENC2_A_PIN = 3;  // Interrupt-capable
+const int ENC2_B_PIN = 5;
+
+// Encoder counts
+volatile long encoder1A_count = 0;
+volatile long encoder1B_count = 0;
+volatile long encoder2A_count = 0;
+volatile long encoder2B_count = 0;
+
+// Interrupt service routines
+void encoder1A_ISR() { encoder1A_count++; }
+void encoder1B_ISR() { encoder1B_count++; }
+void encoder2A_ISR() { encoder2A_count++; }
+void encoder2B_ISR() { encoder2B_count++; }
 
 void setup() {
-  // Set motor pins as output
-  pinMode(M1_A1, OUTPUT);
-  pinMode(M1_A2, OUTPUT);
-  pinMode(M2_A1, OUTPUT);
-  pinMode(M2_A2, OUTPUT);
-
-  // Set encoder pins as input
-  pinMode(encoder1_A, INPUT);
-  pinMode(encoder1_B, INPUT);
-  pinMode(encoder2_A, INPUT);
-  pinMode(encoder2_B, INPUT);
-  
-  // Attach interrupts to encoder pins
-  attachInterrupt(digitalPinToInterrupt(encoder1_A), encoder1_ISR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(encoder2_A), encoder2_ISR, CHANGE);
-
-  // Start serial communication
   Serial.begin(115200);
+
+  pinMode(ENC1_A_PIN, INPUT);
+  pinMode(ENC1_B_PIN, INPUT);
+  pinMode(ENC2_A_PIN, INPUT);
+  pinMode(ENC2_B_PIN, INPUT);
+
+  attachInterrupt(digitalPinToInterrupt(ENC1_A_PIN), encoder1A_ISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(ENC1_B_PIN), encoder1B_ISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(ENC2_A_PIN), encoder2A_ISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(ENC2_B_PIN), encoder2B_ISR, RISING);
 }
 
 void loop() {
-  // Check if data is available in the serial buffer
-  if (Serial.available() > 0) {
+  if (Serial.available()) {
     String command = Serial.readStringUntil('\n');
-    
-    // Parse motor commands from the received string
-    int m1a, m1b, m2a, m2b;
-    sscanf(command.c_str(), "M1:%d,%d;M2:%d,%d", &m1a, &m1b, &m2a, &m2b);
-    
-    // Control motor 1
-    analogWrite(M1_A1, abs(m1a));  // Set PWM for motor 1A
-    digitalWrite(M1_A2, m1a > 0 ? HIGH : LOW);  // Set direction
-    
-    // Control motor 2
-    analogWrite(M2_A1, abs(m2a));  // Set PWM for motor 2A
-    digitalWrite(M2_A2, m2a > 0 ? HIGH : LOW);  // Set direction
+    command.trim();
+
+    if (command.startsWith("M1:")) {
+      int m1a = command.substring(3, command.indexOf(',')).toInt();
+      int m1b = command.substring(command.indexOf(',') + 1, command.indexOf(';')).toInt();
+      motor1A.setSpeed(m1a);
+      motor1B.setSpeed(m1b);
+    }
+
+    if (command.indexOf("M2:") != -1) {
+      int m2_start = command.indexOf("M2:") + 3;
+      int m2a = command.substring(m2_start, command.indexOf(',', m2_start)).toInt();
+      int m2b = command.substring(command.indexOf(',', m2_start) + 1).toInt();
+      motor2A.setSpeed(m2a);
+      motor2B.setSpeed(m2b);
+    }
   }
-}
-
-// Interrupt service routine for encoder 1
-void encoder1_ISR() {
-  int state1 = digitalRead(encoder1_B);
-  encoder1_count += (state1 == HIGH) ? 1 : -1;  // Adjust count based on direction
-}
-
-// Interrupt service routine for encoder 2
-void encoder2_ISR() {
-  int state2 = digitalRead(encoder2_B);
-  encoder2_count += (state2 == HIGH) ? 1 : -1;  // Adjust count based on direction
 }
